@@ -66,9 +66,9 @@
                      *project-directory*)))
 
 (defun read-tag ()
-  (format t "alternative tag: ")
-  (force-output)
-  (trim-spaces (read-line)))
+  (format *query-io* "alternative tag: ")
+  (force-output *query-io*)
+  (trim-spaces (read-line *query-io*)))
 
 (defun expand-template (pathname tags)
   (loop
