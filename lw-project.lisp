@@ -32,13 +32,18 @@
   (let ((*project-directory* (get-project-directory *project-name*))
         (*script-pathname* (merge-pathnames "_lw_project.lisp" *template-directory*)))
     (check-already-exist)
-    (ensure-directories-exist *project-directory*)
-    (copy-template-directory *template-directory*)
-    (load-script-file *script-pathname*)))
+    (handler-bind ((lw-project-error 'cleanup-project-directory))
+      (ensure-directories-exist *project-directory*)
+      (copy-template-directory *template-directory*)
+      (load-script-file *script-pathname*))))
 
 (defun get-project-directory (name)
   (make-pathname :directory (append (pathname-directory *common-lisp-directory*)
                                     (list name))))
+
+(defun check-already-exist ()
+  (when (probe-file *project-directory*)
+    (error 'already-exist-error :pathname *project-directory*)))
 
 (defun load-script-file (script-pathname)
   (when-let (script-file (probe-file script-pathname))
@@ -50,9 +55,8 @@
                 :until (eq form eof)
                 :do (eval form)))))))
 
-(defun check-already-exist ()
-  (when (probe-file *project-directory*)
-    (error 'already-exist-error :pathname *project-directory*)))
+(defun cleanup-project-directory ()
+  (uiop:delete-directory-tree *project-directory* :validate t))
 
 (defun copy-template-directory (pathname)
   (dolist (pathname (directory (uiop:ensure-directory-pathname pathname)))
