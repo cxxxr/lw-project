@@ -34,9 +34,8 @@
         (copy-template-file pathname))))
 
 (defun copy-template-file (pathname)
-  (let* ((template-text (file-string pathname))
-         (new-text (expand-template template-text :name *project-name*))
-         (dst (template-to-project-pathname pathname)))
+  (let ((new-text (expand-template pathname (list :name *project-name*)))
+        (dst (template-to-project-pathname pathname)))
     (ensure-directories-exist dst)
     (write-file new-text dst)))
 
@@ -49,16 +48,19 @@
                          relative-path)
                      *project-directory*)))
 
-(defun expand-template (text &rest tags)
-  (with-output-to-string (stream)
-    (loop :for start := 0 :then (1+ pos2)
-          :for pos1 := (position #\{ text :start start)
-          :for pos2 := (when pos1 (position #\} text :start pos1))
-          :do (write-string text stream :start start :end pos1)
-          :while pos1
-          :do (let* ((tag (subseq text (1+ pos1) pos2))
-                     (value (find-tag tag tags)))
-                (write-string value stream)))))
+(defgeneric expand-template (source tags)
+  (:method ((pathname pathname) tags)
+   (expand-template (file-string pathname) tags))
+  (:method ((text string) tags)
+   (with-output-to-string (stream)
+     (loop :for start := 0 :then (1+ pos2)
+           :for pos1 := (position #\{ text :start start)
+           :for pos2 := (when pos1 (position #\} text :start pos1))
+           :do (write-string text stream :start start :end pos1)
+           :while pos1
+           :do (let* ((tag (subseq text (1+ pos1) pos2))
+                      (value (find-tag tag tags)))
+                 (write-string value stream))))))
 
 (defun find-tag (tag tags &optional errorp)
   (loop :for (key value) :on tags :by #'cddr
