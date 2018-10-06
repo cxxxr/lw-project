@@ -10,10 +10,10 @@
 (defvar *project-directory*)
 (defvar *project-name*)
 
-(define-condition lw-project-condition (simple-condition)
+(define-condition lw-project-error (simple-error)
   ())
 
-(define-condition already-exist (lw-project-condition)
+(define-condition already-exist-error (lw-project-condition)
   ((pathname :initarg :pathname :reader already-exist-pathname))
   (:report (lambda (condition stream)
              (format stream "~S already exists." (already-exist-pathname condition)))))
@@ -52,7 +52,7 @@
 
 (defun check-already-exist ()
   (when (probe-file *project-directory*)
-    (error 'already-exist :pathname *project-directory*)))
+    (error 'already-exist-error :pathname *project-directory*)))
 
 (defun copy-template-directory (pathname)
   (dolist (pathname (directory (uiop:ensure-directory-pathname pathname)))
