@@ -1,11 +1,12 @@
 (defpackage :lw-project
   (:add-use-defaults t)
-  (:export :make-project))
+  (:export :*project-directory* :*project-name* :make-project))
 (in-package :lw-project)
 
 (defparameter *common-lisp-directory* (merge-pathnames "common-lisp/" (user-homedir-pathname)))
 (defparameter *template-directory* (asdf:system-relative-pathname :lw-project "template/"))
 
+(defvar *script-pathname*)
 (defvar *project-directory*)
 (defvar *project-name*)
 
@@ -22,9 +23,21 @@
 (defun make-project (*project-name* &key
                                     ((:template-directory *template-directory*)
                                      *template-directory*))
-  (let ((*project-directory* (get-project-directory *project-name*)))
+  (let ((*project-directory* (get-project-directory *project-name*))
+        (*script-pathname* (merge-pathnames "_lw_project.lisp" *template-directory*)))
     (ensure-directories-exist *project-directory*)
-    (copy-template-directory *template-directory*)))
+    (copy-template-directory *template-directory*)
+    (load-script-file *script-pathname*)))
+
+(defun load-script-file (script-pathname)
+  (when-let (script-file (probe-file script-pathname))
+    (let ((script-text (expand-template script-file (list :name *project-name*))))
+      (with-input-from-string (in script-text)
+        (let ((*package* (find-package :cl-user))
+              (eof '#:eof))
+          (loop :for form := (read in nil eof)
+                :until (eq form eof)
+                :do (eval form)))))))
 
 (defun get-project-directory (name)
   (make-pathname :directory (append (pathname-directory *common-lisp-directory*)
@@ -37,10 +50,11 @@
         (copy-template-file pathname))))
 
 (defun copy-template-file (pathname)
-  (let ((new-text (expand-template pathname (list :name *project-name*)))
-        (dst (template-to-project-pathname pathname)))
-    (ensure-directories-exist dst)
-    (write-to-file dst new-text)))
+  (unless (uiop:pathname-equal pathname *script-pathname*)
+    (let ((new-text (expand-template pathname (list :name *project-name*)))
+          (dst (template-to-project-pathname pathname)))
+      (ensure-directories-exist dst)
+      (write-to-file dst new-text))))
 
 (defun template-to-project-pathname (pathname)
   (let ((relative-path (enough-namestring pathname *template-directory*)))
