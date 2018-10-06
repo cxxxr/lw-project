@@ -12,7 +12,8 @@
 (define-condition lw-project-condition (simple-condition) ())
 
 (define-condition tag-error (lw-project-condition)
-  ((name :initarg :name :reader tag-error-name))
+  ((name :initarg :name :reader tag-error-name)
+   (position :initarg :position :reader tag-error-position))
   (:report (lambda (condition stream)
              (format stream "~S does not exist." (tag-error-name condition)))))
 
@@ -60,13 +61,13 @@
            :while pos1
            :do (let* ((tag (subseq text (1+ pos1) pos2))
                       (value (find-tag tag tags)))
+                 (unless value (error 'tag-error :name tag :position pos1))
                  (write-string value stream))))))
 
-(defun find-tag (tag tags &optional errorp)
+(defun find-tag (tag tags)
   (loop :for (key value) :on tags :by #'cddr
         :when (string-equal tag key)
-        :do (return value)
-        :finally (when errorp (error 'tag-error :name tag))))
+        :do (return value)))
 
 (defun write-file (string pathname)
   (with-open-file (stream pathname
