@@ -1,5 +1,5 @@
 (defpackage :lw-project
-  (:use :cl)
+  (:add-use-defaults t)
   (:export :make-project))
 (in-package :lw-project)
 
@@ -40,7 +40,7 @@
   (let ((new-text (expand-template pathname (list :name *project-name*)))
         (dst (template-to-project-pathname pathname)))
     (ensure-directories-exist dst)
-    (write-file new-text dst)))
+    (write-to-file dst new-text)))
 
 (defun template-to-project-pathname (pathname)
   (let ((relative-path (enough-namestring pathname *template-directory*)))
@@ -66,7 +66,7 @@
          (edit-on-error-position tag-error new-tag))))))
 
 (defun expand-template-1 (pathname tags)
-  (let ((text (hcl:file-string pathname)))
+  (let ((text (file-string pathname)))
     (with-output-to-string (stream)
       (loop :for start := 0 :then (1+ pos2)
             :for pos1 := (position #\{ text :start start)
@@ -86,7 +86,7 @@
   (with-slots (start end pathname) tag-error
     (let* ((buffer (editor:make-buffer (namestring pathname) :temporary t))
            (point (editor:buffer-point buffer)))
-      (editor:insert-string point (hcl:file-string pathname))
+      (editor:insert-string point (file-string pathname))
       (editor:buffer-start point)
       (editor:character-offset point (1+ start))
       (editor::delete-characters point (- end start 1))
@@ -103,7 +103,7 @@
 (defun trim-spaces (string)
   (string-trim '(#\space #\newline) string))
 
-(defun write-file (string pathname)
+(defun write-to-file (pathname string)
   (with-open-file (stream pathname
                           :direction :output
                           :if-exists :error
