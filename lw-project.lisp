@@ -13,9 +13,11 @@
 
 (define-condition tag-error (lw-project-condition)
   ((name :initarg :name :reader tag-error-name)
-   (position :initarg :position :reader tag-error-position))
+   (pathname :initarg :pathname :reader tag-error-pathname)
+   (start :initarg :start :reader tag-error-start)
+   (end :initarg :end :reader tag-error-end))
   (:report (lambda (condition stream)
-             (format stream "~S does not exist." (tag-error-name condition)))))
+             (format stream "~s does not exist." (tag-error-name condition)))))
 
 (defun make-project (*project-name* &key
                                     ((:template-directory *template-directory*)
@@ -49,25 +51,57 @@
                          relative-path)
                      *project-directory*)))
 
-(defgeneric expand-template (source tags)
-  (:method ((pathname pathname) tags)
-   (expand-template (file-string pathname) tags))
-  (:method ((text string) tags)
-   (with-output-to-string (stream)
-     (loop :for start := 0 :then (1+ pos2)
-           :for pos1 := (position #\{ text :start start)
-           :for pos2 := (when pos1 (position #\} text :start pos1))
-           :do (write-string text stream :start start :end pos1)
-           :while pos1
-           :do (let* ((tag (subseq text (1+ pos1) pos2))
-                      (value (find-tag tag tags)))
-                 (unless value (error 'tag-error :name tag :position pos1))
-                 (write-string value stream))))))
+(defun read-tag ()
+  (format t "alternative tag: ")
+  (force-output)
+  (trim-spaces (read-line)))
+
+(defun expand-template (pathname tags)
+  (loop
+   (let (tag-error)
+     (restart-case (handler-bind ((tag-error (lambda (c) (setq tag-error c))))
+                     (return-from expand-template (expand-template-1 pathname tags)))
+       (fix-error-position (new-tag)
+         :interactive (lambda () (list (read-tag)))
+         (edit-on-error-position tag-error new-tag))))))
+
+(defun expand-template-1 (pathname tags)
+  (let ((text (hcl:file-string pathname)))
+    (with-output-to-string (stream)
+      (loop :for start := 0 :then (1+ pos2)
+            :for pos1 := (position #\{ text :start start)
+            :for pos2 := (when pos1 (position #\} text :start pos1))
+            :do (write-string text stream :start start :end pos1)
+            :while pos1
+            :do (let* ((tag (subseq text (1+ pos1) pos2))
+                       (value (find-tag tag tags)))
+                  (unless value (error 'tag-error
+                                       :name tag
+                                       :pathname pathname
+                                       :start pos1
+                                       :end pos2))
+                  (write-string value stream))))))
+
+(defun edit-on-error-position (tag-error new-tag)
+  (with-slots (start end pathname) tag-error
+    (let* ((buffer (editor:make-buffer (namestring pathname) :temporary t))
+           (point (editor:buffer-point buffer)))
+      (editor:insert-string point (hcl:file-string pathname))
+      (editor:buffer-start point)
+      (editor:character-offset point (1+ start))
+      (editor::delete-characters point (- end start 1))
+      (editor:insert-string point new-tag)
+      (editor:write-region-to-file (editor:buffers-start buffer)
+                                   (editor:buffers-end buffer)
+                                   pathname))))
 
 (defun find-tag (tag tags)
   (loop :for (key value) :on tags :by #'cddr
         :when (string-equal tag key)
         :do (return value)))
+
+(defun trim-spaces (string)
+  (string-trim '(#\space #\newline) string))
 
 (defun write-file (string pathname)
   (with-open-file (stream pathname
@@ -76,7 +110,6 @@
                           :if-does-not-exist :create)
     (write-string string stream)))
 
-#+lispworks
 (editor:defcommand "Make Project" (p) "" ""
   (declare (ignore p))
   (let ((name (editor:prompt-for-string :prompt "Project Name: ")))
